@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Inkling Model ビューア</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#222;font-family:-apple-system,"Hiragino Sans",sans-serif;color:#fff;overscroll-behavior:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:fixed;left:0;right:0;bottom:0;padding:10px 10px calc(10px + env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;gap:8px;justify-content:center;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+button{font:inherit;font-size:14px;padding:10px 14px;border:0;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+button:active{background:rgba(255,255,255,.35)}
+button.on{background:#ff7a1a}
+#msg{position:fixed;top:12px;left:0;right:0;text-align:center;font-size:13px;text-shadow:0 1px 3px #000;pointer-events:none}
+#hint{position:fixed;top:36px;left:0;right:0;text-align:center;font-size:12px;opacity:.75;pointer-events:none;text-shadow:0 1px 3px #000}
+</style>
+<script type="importmap">
+{"imports":{"three":"./vendor/three/build/three.module.js"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="msg">読み込み中…</div>
+<div id="hint">ドラッグ:回転 / ピンチ:拡大縮小 / 2本指:移動</div>
+<div id="ui">
+<button id="bRot" class="on">自動回転: オン</button>
+<button id="bBg">背景色</button>
+<button id="bLight">ライト: 標準</button>
+<button id="bWire">ワイヤー: オフ</button>
+<button id="bReset">視点リセット</button>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from './vendor/three/examples/jsm/loaders/GLTFLoader.js';
+import {OrbitControls} from './vendor/three/examples/jsm/controls/OrbitControls.js';
+
+const msg=document.getElementById('msg');
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,1,0.01,100);
+const controls=new OrbitControls(camera,canvas);
+controls.enableDamping=true;
+controls.autoRotate=true; controls.autoRotateSpeed=2.5;
+controls.screenSpacePanning=true;
+
+const backgrounds=[0x2b2f3a,0xf0f0f0,0x111111,0x6fc3ff,0x7a2fd0];
+let bgI=0; scene.background=new THREE.Color(backgrounds[0]);
+
+const amb=new THREE.AmbientLight(0xffffff,0.5);
+const hemi=new THREE.HemisphereLight(0xffffff,0x445566,0.6);
+const key=new THREE.DirectionalLight(0xffffff,2.2); key.position.set(3,5,4);
+const rim=new THREE.DirectionalLight(0x99bbff,1.0); rim.position.set(-4,2,-4);
+camera.add(key); scene.add(camera,amb,hemi,rim);
+const lightModes=[
+ {n:'標準',a:.5,h:.6,k:2.2,r:1.0},
+ {n:'明るい',a:1.2,h:1.0,k:2.8,r:1.4},
+ {n:'ドラマ',a:.05,h:.1,k:3.5,r:2.0},
+ {n:'フラット',a:2.5,h:0,k:0,r:0}];
+let lmI=0;
+function applyLight(){const m=lightModes[lmI];amb.intensity=m.a;hemi.intensity=m.h;key.intensity=m.k;rim.intensity=m.r;
+ document.getElementById('bLight').textContent='ライト: '+m.n;}
+
+let home={pos:new THREE.Vector3(),target:new THREE.Vector3()};
+let model=null;
+function frame(){
+ const box=new THREE.Box3().setFromObject(model);
+ const size=box.getSize(new THREE.Vector3()),c=box.getCenter(new THREE.Vector3());
+ const vf=THREE.MathUtils.degToRad(camera.fov/2);
+ const hf=Math.atan(Math.tan(vf)*camera.aspect);
+ const half=Math.max(size.x,size.z)/2;
+ const dist=Math.max((size.y/2)/Math.tan(vf),half/Math.tan(hf))*1.2+half;
+ home.target.copy(c);
+ home.pos.set(c.x+dist*0.35,c.y+dist*0.15,c.z+dist*0.93);
+ camera.near=dist/100;camera.far=dist*20;camera.updateProjectionMatrix();
+ controls.minDistance=dist*0.3;controls.maxDistance=dist*4;
+ reset();
+}
+function reset(){camera.position.copy(home.pos);controls.target.copy(home.target);controls.update();}
+
+new GLTFLoader().load('export/inkling.glb',g=>{
+ model=g.scene;scene.add(model);frame();msg.textContent='Inkling Model';
+ setTimeout(()=>msg.style.opacity=.6,2500);
+ window.__loaded=true;
+},undefined,e=>{msg.textContent='モデルを読み込めませんでした';console.error(e);});
+
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+
+const $=id=>document.getElementById(id);
+$('bRot').onclick=e=>{controls.autoRotate=!controls.autoRotate;e.target.classList.toggle('on',controls.autoRotate);e.target.textContent='自動回転: '+(controls.autoRotate?'オン':'オフ');};
+$('bBg').onclick=()=>{bgI=(bgI+1)%backgrounds.length;scene.background=new THREE.Color(backgrounds[bgI]);};
+$('bLight').onclick=()=>{lmI=(lmI+1)%lightModes.length;applyLight();};
+let wire=false;
+$('bWire').onclick=e=>{wire=!wire;model&&model.traverse(o=>{if(o.isMesh)[].concat(o.material).forEach(m=>m.wireframe=wire);});e.target.classList.toggle('on',wire);e.target.textContent='ワイヤー: '+(wire?'オン':'オフ');};
+$('bReset').onclick=()=>{if(model)reset();};
+// 触ったら一時的に自動回転を止めず、そのまま続行（ボタンで切替）
+renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
+</script>
+</body>
+</html>

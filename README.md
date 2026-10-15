@@ -4,6 +4,12 @@ Blender で作成した、インクリング風のローポリ 3D キャラク�
 
 ![プレビュー](render/inkling_render.png)
 
+## 3D ビューア（ブラウザで回して見る）
+
+**https://8bitgrokbot.github.io/inkling-model/**
+
+iPhone Safari を含むブラウザで `export/inkling.glb` を表示します。ドラッグで回転、ピンチで拡大縮小、2本指でパン。自動回転のオン/オフ、背景色・ライト切替、ワイヤーフレーム表示に対応しています。three.js（r186、MIT）を `vendor/three/` に同梱しており、外部 CDN は使いません。
+
 ## ファイル構成
 
 | パス | 内容 |
